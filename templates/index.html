@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forensic Analysis Station</title>
+    <style>
+        :root {
+            --bg-main: #0b0f19;
+            --bg-card: #131a2c;
+            --border: #1e293b;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --blue: #3b82f6;
+            --green: #10b981;
+            --red: #ef4444;
+        }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-main); color: var(--text-main); padding: 24px; margin: 0; overflow-x: hidden; }
+        .workspace-grid { display: grid; grid-template-columns: 1fr 380px; gap: 24px; max-width: 100%; margin: 0 auto; }
+        .main-panel { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+        .card { background: var(--bg-card); padding: 24px; border-radius: 6px; border: 1px solid var(--border); position: relative; }
+        h1 { font-size: 20px; margin: 0 0 4px 0; }
+        h3 { margin-top: 0; margin-bottom: 16px; color: var(--text-sub); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+        .header-strip { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+        .user-badge { display: inline-flex; gap: 16px; font-size: 13px; color: var(--text-sub); align-items: center; }
+        .badge-tag { background: #1e293b; padding: 4px 10px; border-radius: 4px; color: var(--text-main); }
+
+        .stats-counter-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .stats-counter-row .stat-card { background: #182238; border: 1px solid var(--border); border-radius: 6px; padding: 16px; text-align: center; }
+        .stats-counter-row .stat-number { font-size: 24px; font-weight: 700; margin-top: 4px; font-family: monospace; }
+
+        .triage-input-box { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .camera-panel { border-left: 1px solid var(--border); padding-left: 24px; }
+        .viewfinder-wrapper { width: 100%; max-width: 360px; height: 220px; background: #070a12; border-radius: 4px; border: 1px solid var(--border); overflow: hidden; display: flex; justify-content: center; align-items: center; }
+        
+        .dashboard-grid { display: grid; grid-template-columns: 46% 51%; justify-content: space-between; gap: 24px; }
+        .visual-column { display: flex; flex-direction: column; gap: 20px; }
+        .zoom-window { overflow: hidden; border-radius: 4px; border: 1px solid var(--border); background: #000; cursor: zoom-in; display: inline-block; width: 100%; max-height: 260px; }
+        img.viewframe { max-width: 100%; max-height: 260px; width: 100%; object-fit: contain; transition: transform 0.1s ease-out; transform-origin: center center; display: block; }
+        
+        .slider-wrapper { position: relative; width: 100%; max-width: 100%; overflow: hidden; border-radius: 4px; border: 1px solid var(--blue); background: #000; margin: 0 auto; display: flex; justify-content: center; align-items: center; }
+        .slider-img { max-width: 100%; max-height: 340px; width: auto; height: auto; display: block; object-fit: contain; pointer-events: none; }
+        .image-overlay { position: relative; z-index: 1; }
+        .image-underlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; clip-path: inset(0 0 0 50%); z-index: 2; object-fit: contain; }
+        .slider-control { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; background: transparent; -webkit-appearance: none; appearance: none; z-index: 3; cursor: ew-resize; margin: 0; height: 100%; }
+        .slider-control::-webkit-slider-thumb { -webkit-appearance: none; width: 2px; height: 2000px; background: var(--blue); }
+        
+        .manifest-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; margin-bottom: 8px; background: #182238; border-radius: 4px; border-left: 3px solid var(--blue); font-size: 13px; font-family: monospace; }
+        .metric-name { color: var(--text-sub); }
+        .metric-value { color: var(--text-main); text-align: right; max-width: 65%; word-break: break-all; }
+        .alert-row { background: rgba(239, 68, 68, 0.1) !important; border-left-color: var(--red) !important; }
+
+        input[type="file"] { padding: 10px; background: #182238; border: 1px solid var(--border); border-radius: 4px; color: var(--text-sub); width: 100%; box-sizing: border-box; }
+        button, .btn-link, .filter-btn, .action-red-btn { padding: 10px 16px; font-size: 13px; font-family: inherit; border-radius: 4px; font-weight: 600; text-decoration: none; display: inline-block; border: none; }
+        button { background: var(--blue); color: white; cursor: pointer; }
+        .action-red-btn { background: var(--red); color: white; cursor: pointer; }
+
+        .filter-controls { display: flex; gap: 8px; align-items: center; margin-top: 24px; padding: 12px; background: var(--bg-card); border-radius: 4px; border: 1px solid var(--border); }
+        .filter-btn { background: #1e293b; color: var(--text-sub); }
+        .filter-btn.active { background: var(--blue); color: white; }
+        .history-table { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 13px; background: var(--bg-card); border: 1px solid var(--border); }
+        .history-table th, .history-table td { padding: 12px; border: 1px solid var(--border); }
+        .history-table th { background: #182238; color: var(--text-sub); text-align: left; }
+
+        .sidebar-panel { display: flex; flex-direction: column; background: var(--bg-card); position: sticky; top: 24px; height: calc(100vh - 48px); border-radius: 6px; border: 1px solid var(--border); overflow: hidden; box-sizing: border-box; width: 100%; }
+        .chat-header { background: #182238; padding: 0 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 12px; display: flex; justify-content: space-between; align-items: center; height: 50px; min-height: 50px; box-sizing: border-box; }
+        .chat-logs { flex: 1; padding: 16px; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 12px; background: #0b0f19; box-sizing: border-box; }
+        .msg { padding: 10px 14px; border-radius: 4px; max-width: 85%; word-break: break-word; }
+        .msg.user { background: var(--blue); color: white; align-self: flex-end; }
+        .msg.bot { background: #1e293b; color: var(--text-main); align-self: flex-start; border: 1px solid var(--border); white-space: pre-line; }
+        .chat-suggested-options { padding: 12px; background: #111827; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 6px; box-sizing: border-box; }
+        .suggest-btn { background: #1f2937; color: var(--blue); border: 1px solid var(--border); padding: 6px 10px; font-size: 11px; border-radius: 4px; cursor: pointer; font-weight: 500; }
+        .chat-input-area { display: flex; border-top: 1px solid var(--border); background: #182238; padding: 12px; gap: 8px; box-sizing: border-box; }
+        .chat-input-area input { flex: 1; background: var(--bg-main); border: 1px solid var(--border); color: white; padding: 8px 12px; font-size: 13px; border-radius: 4px; outline: none; min-width: 0; }
+
+        .scan-overlay-curtain { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 15, 25, 0.9); z-index: 1000; border-radius: 6px; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+        .scanner-scope-box { position: relative; width: 120px; height: 120px; border: 2px solid var(--blue); border-radius: 4px; overflow: hidden; }
+        .scanner-laser-line { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: var(--blue); box-shadow: 0 0 12px var(--blue); animation: radarSweep 1.8s infinite ease-in-out; }
+        @keyframes radarSweep { 0% { top: 0%; } 50% { top: 100%; } 100% { top: 0%; } }
+        .scan-text-feedback { font-family: monospace; font-size: 13px; color: var(--blue); }
+    </style>
+</head>
+<body>
+    <div class="workspace-grid" id="main-layout-grid">
+        <div class="main-panel">
+            
+            <div class="card" style="padding: 0; border: none; background: transparent;">
+                <div id="biometric-loader" class="scan-overlay-curtain">
+                    <div class="scanner-scope-box"><div class="scanner-laser-line"></div></div>
+                    <div class="scan-text-feedback">🧬 PROCESSING FILE ANALYSIS IN BACKGROUND THREAD...</div>
+                    <div id="analysis-status-text" class="scan-text-feedback" style="color: var(--text-sub);">Preparing task tracker...</div>
+                </div>
+
+                <div class="card">
+                    <div class="header-strip">
+                        <div>
+                            <h1>Forensic Analysis Station</h1>
+                            <div style="font-size:12px; color:var(--text-sub);">Uncompromised Evaluation Framework Platform Node</div>
+                        </div>
+                        <div class="user-badge">
+                            <span>User: <span class="badge-tag">{{ current_user }}</span></span>
+                            <span>Clearance: <span class="badge-tag" style="color:var(--blue);">{{ current_role }}</span></span>
+                            <a href="/logout" style="color:var(--red); text-decoration:none; font-weight:600; font-size:13px; margin-left:8px;">[Sign Out]</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-counter-row">
+                <div class="stat-card"><div>Total Checked</div><div class="stat-number" id="box-total-count" style="color:var(--blue);">0</div></div>
+                <div class="stat-card"><div>Verified Real</div><div class="stat-number" id="box-real-count" style="color:var(--green);">0</div></div>
+                <div class="stat-card"><div>AI Fakes Caught</div><div class="stat-number" id="box-fake-count" style="color:var(--red);">0</div></div>
+            </div>
+
+            <div class="card triage-input-box">
+                <form action="/process" method="POST" enctype="multipart/form-data" onsubmit="window.history.replaceState({}, document.title, '/'); document.getElementById('biometric-loader').style.display = 'flex';">
+                    <h3>Upload New Image File</h3>
+                    <input type="file" name="file" accept="image/*" required>
+                    <div style="margin-top:12px;"><button type="submit">Start Analysis Scan</button></div>
+                </form>
+                
+                <div class="camera-panel">
+                    <h3>Live Camera Stream</h3>
+                    <div class="viewfinder-wrapper" id="viewfinder-box">
+                        <video id="camera-stream" autoplay playsinline style="width:100%; height:100%; object-fit:cover; display:none;"></video>
+                        <canvas id="camera-canvas" style="display:none;"></canvas>
+                        <div id="camera-lock-msg" class="camera-placeholder">🔒 Video Feed Mode Standby</div>
+                    </div>
+                    <div style="margin-top:8px; display:flex; gap:8px;">
+                        <button type="button" id="start-camera-btn" class="filter-btn">Start Camera</button>
+                        <button type="button" id="capture-camera-btn" class="filter-btn" style="background:var(--blue); color:#fff;">Capture & Analyze</button>
+                        <button type="button" id="stop-camera-btn" class="filter-btn" style="background:#ef4444; color:#fff; display:none;">Stop Camera</button>
+                    </div>
+                    <form id="webcam-form" action="/process_webcam" method="POST" style="display:none;">
+                        <input type="hidden" name="image_base64" id="image_base64_input">
+                    </form>
+                    <div id="camera-debug" style="margin-top:8px; font-size:12px; color:var(--text-sub);">Camera status: idle</div>
+                </div>
+            </div>
+
+            <div id="asynchronous-results-grid-holder"></div>
+
+            <div>
+                <div class="filter-controls">
+                    <span style="font-size:11px; font-weight:700; color:var(--text-sub); text-transform:uppercase;">Search Filter Logs:</span>
+                    <a href="/?verdict=ALL" class="filter-btn {% if active_filter=='ALL' or not active_filter %}active{% endif %}">ALL RUNS</a>
+                    <a href="/?verdict=DEEPFAKE" class="filter-btn {% if active_filter=='DEEPFAKE' %}active{% endif %}" style="{% if active_filter=='DEEPFAKE' %}background:var(--red);{% endif %}">AI FAILS</a>
+                    <a href="/?verdict=AUTHENTIC" class="filter-btn {% if active_filter=='AUTHENTIC' %}active{% endif %}" style="{% if active_filter=='AUTHENTIC' %}background:var(--green);{% endif %}">VERIFIED REAL</a>
+                    <a href="/api/v1/export/csv" class="btn-link" style="margin-left:auto;">Download CSV Spreadsheet</a>
+                    <form action="/api/v1/clear_logs" method="POST" style="margin: 0;"><button type="submit" class="action-red-btn">Clear History Logs</button></form>
+                </div>
+                {% if history %}
+                <table class="history-table">
+                    <thead><tr><th>Filename</th><th>Verification Timestamp</th><th>Final System Verdict</th></tr></thead>
+                    <tbody>{% for row in history %}<tr><td style="font-weight:500;">{{ row[0] }}</td><td style="color:var(--text-sub);">{{ row[1] }}</td><td>{{ row[2] }}</td></tr>{% endfor %}</tbody>
+                </table>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="sidebar-panel" id="sidebar-container">
+            <div class="chat-header"><span class="header-title">USHA ASSISTANT TERMINAL</span></div>
+            <div id="chat-box" class="chat-logs"><div class="msg bot">System ready. Deep learning layers initialized. Select a diagnostic option query below!</div></div>
+            <div class="chat-suggested-options">
+                <button type="button" class="suggest-btn" onclick="submitQuickQuery('📊 System Status')">📊 System Status</button>
+                <button type="button" class="suggest-btn" onclick="submitQuickQuery('📋 View Recent Logs')">📋 View Recent Logs</button>
+            </div>
+            <div class="chat-input-area"><input type="text" id="chat-user-input" readonly placeholder="Click a shortcut button option above..."><button type="button" style="opacity:0.5; cursor:not-allowed;">Send</button></div>
+        </div>
+    </div>
+
+    <script>
+        const activeTaskId = "{{ loading_task_id }}";
+        if (activeTaskId && activeTaskId !== "None" && activeTaskId !== "") {
+            document.getElementById("biometric-loader").style.display = "flex";
+            setLoaderStatus("Analysis task detected. Waiting for results...");
+            pollBackgroundTaskStatus(activeTaskId);
+        }
+
+        const TASK_POLL_TIMEOUT_MS = 600000;
+
+        function setLoaderStatus(message) {
+            const statusNode = document.getElementById("analysis-status-text");
+            if (statusNode) {
+                statusNode.innerText = message;
+            }
+        }
+
+        function showAnalysisError(message) {
+            document.getElementById("biometric-loader").style.display = "none";
+            const resultsHolder = document.getElementById("asynchronous-results-grid-holder");
+            if (resultsHolder) {
+                resultsHolder.innerHTML = `<div class="card" style="border-left: 3px solid var(--red);"><h3>Analysis Failed</h3><div style="color: var(--text-sub); font-size: 13px; white-space: pre-line;">${message}</div></div>`;
+            }
+        }
+
+        function pollBackgroundTaskStatus(taskId) {
+            const startedAt = Date.now();
+            const interval = setInterval(() => {
+                if (Date.now() - startedAt > TASK_POLL_TIMEOUT_MS) {
+                    clearInterval(interval);
+                    showAnalysisError("Analysis timed out before producing results.");
+                    return;
+                }
+
+                fetch(`/api/v1/task_status/${encodeURIComponent(taskId)}`)
+                .then(res => res.json())
+                .then(task => {
+                    if (task.status === "SUCCESS") {
+                        clearInterval(interval);
+                        document.getElementById("biometric-loader").style.display = "none";
+                        renderTaskDashboardHTML(task);
+                    } else if (task.status === "FAILED") {
+                        clearInterval(interval);
+                        showAnalysisError(task.error || "Analysis execution tracking broken.");
+                    } else if (task.status === "PROCESSING") {
+                        setLoaderStatus("Analysis task still running...");
+                    } else if (task.status === "NOT_FOUND") {
+                        clearInterval(interval);
+                        showAnalysisError("Analysis task was not found.");
+                    }
+                }).catch((err) => {
+                    clearInterval(interval);
+                    showAnalysisError(err?.message || "Unable to read task status.");
+                });
+            }, 800);
+        }
+
+        function renderTaskDashboardHTML(data) {
+            const manifestRows = Array.isArray(data.manifest) ? data.manifest : [];
+            let manifestHtml = "";
+            let targetButtonsHtml = "";
+            let uniqueTargets = [];
+
+            manifestRows.forEach(row => {
+                let alertClass = (row.metric.includes("🚨") || row.metric.includes("⚠️")) ? " alert-row" : "";
+                if(row.metric.includes("Biometric Target 0")) {
+                    uniqueTargets.push({ metric: row.metric.replace("🧬 Biometric ", ""), val: row.value });
+                } else {
+                    manifestHtml += `<div class="manifest-row${alertClass}"><span class="metric-name">${row.metric}</span><span class="metric-value">${row.value}</span></div>`;
+                }
+            });
+
+            if (manifestRows.length === 0) {
+                manifestHtml = `<div class="manifest-row"><span class="metric-name">Status</span><span class="metric-value">Analysis completed, but no manifest rows were returned.</span></div>`;
+            }
+
+            let targetSectionStyle = "display:none;";
+            if(uniqueTargets.length > 0) {
+                targetSectionStyle = "display:block; margin-bottom: 20px; padding: 14px; background: #1c2538; border-radius: 4px; border: 1px solid var(--border);";
+                uniqueTargets.forEach((t, i) => {
+                    let activeStyle = i === 0 ? "background:var(--blue); color:white;" : "background:#1e293b; color:var(--text-sub);";
+                    targetButtonsHtml += `<button type="button" class="filter-btn" style="padding:6px 12px; font-size:11px; margin-right:8px; ${activeStyle}" onclick="switchTargetContext(this, '${t.metric}')">${t.metric}</button>`;
+                    let activeDisplay = i === 0 ? "flex" : "none";
+                    manifestHtml += `<div class="manifest-row biometric-target-row" id="row-${t.metric}" style="display:${activeDisplay};"><span class="metric-name">🧬 Biometric ${t.metric}</span><span class="metric-value">${t.val}</span></div>`;
+                });
+            }
+
+            const htmlPayload = `
+                <div style="text-align: left; margin-bottom: 24px;"><a href="${data.pdf_url}" class="btn-link" style="background:var(--blue); color:white;">Download PDF Case Report</a></div>
+                <div class="dashboard-grid">
+                    <div class="visual-column">
+                        <div class="card image-card"><h3>Biometric Tracking HUD</h3><div class="zoom-window" onmousemove="runImageZoom(event, this)" onmouseleave="resetImageZoom(this)"><img class="viewframe" src="${data.hud_image}"></div></div>
+                        <div class="card image-card"><h3>Localized Anomaly Heatmap</h3><div class="zoom-window" onmousemove="runImageZoom(event, this)" onmouseleave="resetImageZoom(this)"><img class="viewframe" src="${data.heatmap_image}"></div></div>
+                        <div class="card image-card"><h3>AI Pattern Spectrum Map</h3><div class="zoom-window" onmousemove="runImageZoom(event, this)" onmouseleave="resetImageZoom(this)"><img class="viewframe" src="${data.dft_image}"></div></div>
+                        <div class="card image-card"><h3>Image Tamper Slider</h3><div class="slider-wrapper"><img class="slider-img image-overlay" src="${data.original}"><img id="ela-clip" class="slider-img image-underlay" src="${data.ela_image}"><input type="range" min="0" max="100" value="50" class="slider-control" oninput="wipeImage(this.value)"></div></div>
+                    </div>
+                    <div class="card data-column">
+                        <h3>File Scan Breakdown Details</h3>
+                        <div id="target-ui-container" style="${targetSectionStyle}"><div style="font-size: 11px; text-transform: uppercase; color: var(--text-sub); font-weight: 700; margin-bottom: 8px;">Active Target Selector</div><div style="display: flex; flex-wrap: wrap; gap: 8px;">${targetButtonsHtml}</div></div>
+                        <div id="ledger-rows-wrapper">${manifestHtml}</div>
+                    </div>
+                </div>`;
+            document.getElementById("asynchronous-results-grid-holder").innerHTML = htmlPayload;
+            refreshCounterMetrics();
+        }
+
+        function switchTargetContext(btn, targetId) {
+            btn.parentElement.querySelectorAll("button").forEach(b => { b.style.background = "#1e293b"; b.style.color = "var(--text-sub)"; });
+            btn.style.background = "var(--blue)"; btn.style.color = "white";
+            document.querySelectorAll(".biometric-target-row").forEach(r => r.style.display = "none");
+            document.getElementById(`row-${targetId}`).style.display = "flex";
+        }
+
+        function refreshCounterMetrics() {
+            fetch('/api/v1/metrics').then(res => res.json()).then(d => {
+                document.getElementById('box-total-count').innerText = d.total;
+                document.getElementById('box-real-count').innerText = d.authentic;
+                document.getElementById('box-fake-count').innerText = d.deepfakes;
+            });
+        }
+        refreshCounterMetrics();
+
+        function runImageZoom(e, wrapper) { const img = wrapper.querySelector('img'); const rect = wrapper.getBoundingClientRect(); const x = ((e.clientX - rect.left) / rect.width) * 100; const y = ((e.clientY - rect.top) / rect.height) * 100; img.style.transformOrigin = `${x}% ${y}%`; img.style.transform = 'scale(2.2)'; }
+        function resetImageZoom(wrapper) { const img = wrapper.querySelector('img'); img.style.transform = 'scale(1)'; img.style.transformOrigin = 'center center'; }
+        function wipeImage(val) { document.getElementById('ela-clip').style.clipPath = `inset(0 0 0 ${val}%)`; }
+
+        function sendChatMessage(msgText) {
+            if (!msgText) return;
+            const chatBox = document.getElementById('chat-box');
+            const userDiv = document.createElement('div'); userDiv.className = 'msg user'; userDiv.innerText = msgText; chatBox.appendChild(userDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            fetch('/api/v1/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msgText }) })
+            .then(res => res.json()).then(data => {
+                const botDiv = document.createElement('div'); botDiv.className = 'msg bot'; botDiv.innerText = data.reply; chatBox.appendChild(botDiv); chatBox.scrollTop = chatBox.scrollHeight; 
+            });
+        }
+        function submitQuickQuery(textOption) { sendChatMessage(textOption); }
+
+        // Webcam controls: start, stop, capture and submit frame to /process_webcam
+        (function(){
+            let cameraStream = null;
+            const startBtn = document.getElementById('start-camera-btn');
+            const stopBtn = document.getElementById('stop-camera-btn');
+            const captureBtn = document.getElementById('capture-camera-btn');
+            const video = document.getElementById('camera-stream');
+            const canvas = document.getElementById('camera-canvas');
+
+            function startCamera() {
+                const debugEl = document.getElementById('camera-debug');
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    const msg = 'Camera not supported in this browser.';
+                    if (debugEl) debugEl.innerText = msg;
+                    alert(msg);
+                    return;
+                }
+                if (debugEl) debugEl.innerText = 'Requesting camera permission...';
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+                .then(stream => {
+                    cameraStream = stream;
+                    video.srcObject = stream;
+                    video.style.display = 'block';
+                    document.getElementById('camera-lock-msg').style.display = 'none';
+                    startBtn.style.display = 'none';
+                    stopBtn.style.display = 'inline-block';
+                    if (debugEl) debugEl.innerText = 'Camera started — permissions granted.';
+                }).catch(err => {
+                    console.error('Camera start failed', err);
+                    const msg = 'Unable to access camera: ' + (err.message || err.name || err);
+                    if (debugEl) debugEl.innerText = msg;
+                    alert(msg);
+                });
+            }
+
+            function stopCamera() {
+                const debugEl = document.getElementById('camera-debug');
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(t => t.stop());
+                    cameraStream = null;
+                }
+                video.srcObject = null;
+                video.style.display = 'none';
+                document.getElementById('camera-lock-msg').style.display = 'block';
+                startBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'none';
+                if (debugEl) debugEl.innerText = 'Camera stopped.';
+            }
+
+            function captureAndSubmit() {
+                const debugEl = document.getElementById('camera-debug');
+                if (!cameraStream) { const msg = 'Start the camera first'; if (debugEl) debugEl.innerText = msg; alert(msg); return; }
+                try {
+                    canvas.width = video.videoWidth || 640;
+                    canvas.height = video.videoHeight || 480;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                    document.getElementById('image_base64_input').value = dataUrl;
+                    if (debugEl) debugEl.innerText = 'Captured frame — submitting for analysis...';
+                    // show loader and submit hidden form so server redirects to task
+                    document.getElementById('biometric-loader').style.display = 'flex';
+                    document.getElementById('webcam-form').submit();
+                } catch (e) {
+                    console.error('Capture failed', e);
+                    const msg = 'Capture failed: ' + (e.message || e);
+                    if (debugEl) debugEl.innerText = msg;
+                    alert(msg);
+                }
+            }
+
+            if (startBtn) startBtn.addEventListener('click', startCamera);
+            if (stopBtn) stopBtn.addEventListener('click', stopCamera);
+            if (captureBtn) captureBtn.addEventListener('click', captureAndSubmit);
+        })();
+    </script>
+</body>
+</html>

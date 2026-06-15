@@ -1,0 +1,29 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Result - SECOND FACE</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>{{ future_type }} Future</h1>
+
+    <div class="images">
+        <div>
+            <h3>Original</h3>
+            <img src="{{ url_for('uploaded_file', filename=original_image) }}" width="300">
+        </div>
+
+        <div>
+            <h3>Generated Future</h3>
+            <img src="{{ url_for('uploaded_file', filename=output_image) }}" width="300">
+        </div>
+    </div>
+
+    <a href="/">Try Another</a>
+</div>
+
+</body>
+</html>
