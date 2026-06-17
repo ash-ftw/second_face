@@ -7,3 +7,4 @@ piexif
 reportlab
 deepface
 tensorflow-cpu
+tf-keras

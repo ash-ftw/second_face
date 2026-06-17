@@ -8,8 +8,13 @@ from deepfake_ai import build_training_model
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train the deepfake detector model")
-    parser.add_argument("--data-dir", required=True, help="Directory with real/ and fake/ subfolders")
+    parser.add_argument("--data-dir", required=True, help="Directory with authentic/ and deepfake/ subfolders")
     parser.add_argument("--output", default=os.path.join("models", "deepfake_detector.keras"), help="Path to save the trained model")
+    parser.add_argument(
+        "--checkpoint-dir",
+        default=os.path.join("models", "checkpoints"),
+        help="Directory to save a model checkpoint after every epoch",
+    )
     parser.add_argument("--image-size", type=int, default=224, help="Square image size used for training")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--epochs", type=int, default=15)
@@ -63,15 +68,26 @@ def main() -> None:
         metrics=["accuracy", tf.keras.metrics.AUC(name="auc")],
     )
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    output_dir = os.path.dirname(args.output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(args.checkpoint_dir, exist_ok=True)
+
+    epoch_checkpoint_path = os.path.join(
+        args.checkpoint_dir,
+        "deepfake_detector_epoch_{epoch:03d}_val_auc_{val_auc:.4f}.keras",
+    )
+    training_log_path = os.path.join(args.checkpoint_dir, "training_log.csv")
     callbacks = [
         tf.keras.callbacks.EarlyStopping(monitor="val_auc", patience=4, mode="max", restore_best_weights=True),
         tf.keras.callbacks.ModelCheckpoint(args.output, monitor="val_auc", mode="max", save_best_only=True),
+        tf.keras.callbacks.ModelCheckpoint(epoch_checkpoint_path, save_best_only=False),
+        tf.keras.callbacks.CSVLogger(training_log_path, append=True),
     ]
 
     model.fit(train_ds, validation_data=val_ds, epochs=args.epochs, callbacks=callbacks)
-    model.save(args.output)
-    print(f"Saved trained model to {args.output}")
+    print(f"Saved best trained model to {args.output}")
+    print(f"Saved per-epoch checkpoints to {args.checkpoint_dir}")
 
 
 if __name__ == "__main__":

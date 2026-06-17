@@ -1,7 +1,0 @@
-🔒 SHA-256 Signature||b0f289fe8d719bfd9e53d1cbdcd2bda0cdcbb8b4a90af09ddae376eb3370f01d
-⚖️ Consensus Verdict||🟢 VERIFIED AUTHENTIC CAMERA CAPTURE (97% Certainty)
-📁 Binary Magic Byte Status||JPEG Matrix Standardized via Core Engine
-📡 Embedded Metadata Trace||Brand Signatures: Not Detected | Editing Tags: Clean
-🎭 GAN Architecture Origin||None (Camera Sensor Source Verified)
-🧠 Explainable AI Core||Passed validation. Noise density patterns fully conform to raw hardware sensor grain thresholds.
-🧬 Biometric Target||No Face Detected

@@ -6,11 +6,13 @@ os.environ.setdefault('OMP_NUM_THREADS', '1')
 os.environ.setdefault('MKL_NUM_THREADS', '1')
 os.environ.setdefault('TF_NUM_INTEROP_THREADS', '1')
 os.environ.setdefault('TF_NUM_INTRAOP_THREADS', '1')
+os.environ.setdefault('DEEPFACE_HOME', os.path.join(os.path.dirname(__file__), 'models'))
 
 import time
 import sqlite3
 import hashlib
 import base64
+import binascii
 import csv
 from flask import Flask, render_template, request, redirect, send_file, send_from_directory, jsonify, session, url_for
 from werkzeug.utils import secure_filename
@@ -28,6 +30,11 @@ forensic_suite = AIAger()
 executor = ThreadPoolExecutor(max_workers=4)
 ACTIVE_TASKS = {}  
 TASK_TIMEOUT_SECONDS = 600
+
+def unique_upload_filename(filename):
+    base_name, ext = os.path.splitext(filename)
+    suffix = int(time.time() * 1000)
+    return f"{base_name}_{suffix}{ext}"
 
 def _init_auth_db():
     conn = sqlite3.connect('forensic_history.db')
@@ -130,6 +137,24 @@ def async_heavy_math_task(input_path, filename, task_id):
         clean_ela_path = os.path.join(UPLOAD_FOLDER, 'ela_' + filename).replace('\\', '/')
         clean_heatmap_path = os.path.join(UPLOAD_FOLDER, 'heatmap_' + filename).replace('\\', '/')
         
+        # Verify all expected output files actually exist before reporting SUCCESS
+        expected_files = {
+            "normalized": clean_input_path,
+            "hud": clean_hud_path,
+            "dft": clean_dft_path,
+            "ela": clean_ela_path,
+            "heatmap": clean_heatmap_path,
+        }
+        missing = [name for name, path in expected_files.items() if not os.path.exists(path)]
+        if missing:
+            app.logger.error(f"Task {task_id}: Analysis completed but missing output files: {missing}")
+            ACTIVE_TASKS[task_id] = {
+                "status": "FAILED",
+                "error": f"Analysis completed but {len(missing)} output file(s) were not generated: {', '.join(missing)}. "
+                         f"This may indicate an issue with the input image format or an internal processing error."
+            }
+            return
+        
         ACTIVE_TASKS[task_id] = {
             "status": "SUCCESS",
             "original": f"/{clean_input_path}?v={timestamp}",
@@ -141,35 +166,55 @@ def async_heavy_math_task(input_path, filename, task_id):
             "pdf_url": f"/download_pdf/{normalized_filename}"
         }
     except Exception as e:
+        app.logger.exception(f"Task {task_id} failed during analysis")
         ACTIVE_TASKS[task_id] = {"status": "FAILED", "error": str(e)}
 
 @app.route('/process', methods=['POST'])
 def process_image():
     if 'username' not in session: return redirect(url_for('login_page'))
-    if 'file' not in request.files: return redirect(request.url)
+    if 'file' not in request.files: return redirect(url_for('index'))
     file = request.files['file']
-    if file.filename == '': return redirect(request.url)
-    if file:
-        filename = secure_filename(file.filename)
-        input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if file.filename == '': return redirect(url_for('index'))
+
+    filename = secure_filename(file.filename)
+    if not filename: return redirect(url_for('index'))
+    filename = unique_upload_filename(filename)
+
+    input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    try:
         file.save(input_path)
-        
-        task_id = f"task_{int(time.time() * 1000)}"
-        ACTIVE_TASKS[task_id] = {"status": "PROCESSING", "started_at": time.time()}
-        executor.submit(async_heavy_math_task, input_path, filename, task_id)
-        return redirect(url_for('index', task_id=task_id))
+    except Exception as exc:
+        app.logger.exception("Failed to save uploaded file")
+        return jsonify({"status": "FAILED", "error": f"Unable to save uploaded image: {exc}"}), 400
+
+    task_id = f"task_{int(time.time() * 1000)}"
+    ACTIVE_TASKS[task_id] = {"status": "PROCESSING", "started_at": time.time()}
+    executor.submit(async_heavy_math_task, input_path, filename, task_id)
+    return redirect(url_for('index', task_id=task_id))
 
 @app.route('/process_webcam', methods=['POST'])
 def process_webcam():
     if 'username' not in session: return redirect(url_for('login_page'))
     base64_data = request.form.get('image_base64')
-    if not base64_data: return redirect('/')
-    header, encoded = base64_data.split(",", 1)
-    binary_data = base64.b64decode(encoded)
-    filename = f"webcam_snap_{int(time.time())}.jpg"
+    if not base64_data: return redirect(url_for('index'))
+
+    try:
+        header, encoded = base64_data.split(",", 1)
+        if not header.startswith("data:image/"):
+            raise ValueError("Webcam payload is not an image data URL.")
+        binary_data = base64.b64decode(encoded, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        app.logger.exception("Invalid webcam capture payload")
+        return jsonify({"status": "FAILED", "error": f"Invalid webcam capture: {exc}"}), 400
+
+    filename = f"webcam_snap_{int(time.time() * 1000)}.jpg"
     input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    with open(input_path, "wb") as f: 
-        f.write(binary_data)
+    try:
+        with open(input_path, "wb") as f:
+            f.write(binary_data)
+    except Exception as exc:
+        app.logger.exception("Failed to save webcam capture")
+        return jsonify({"status": "FAILED", "error": f"Unable to save webcam capture: {exc}"}), 400
         
     task_id = f"task_{int(time.time() * 1000)}"
     ACTIVE_TASKS[task_id] = {"status": "PROCESSING", "started_at": time.time()}
